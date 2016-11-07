@@ -100,18 +100,61 @@ describe AutoReplica do
   end
   
   describe AutoReplica::ConnectionHandler do
+    it 'proxies all methods' do
+      original_handler = double('ActiveRecord_ConnectionHandler')
+      expect(original_handler).to receive(:do_that_thing) { :yes }
+      pool_double = double('ConnectionPool')
+      subject = AutoReplica::ConnectionHandler.new(original_handler, pool_double)
+      expect(subject.do_that_thing).to eq(:yes)
+    end
+
+    it 'enhances connection_for and returns an instance of the Adapter' do
+      original_handler = double('ActiveRecord_ConnectionHandler')
+      adapter_double = double('ActiveRecord_Adapter')
+      connection_double = double('Connection')
+      pool_double = double('ConnectionPool')
+      expect(original_handler).to receive(:retrieve_connection).with(TestThing) { adapter_double }
+      expect(pool_double).to receive(:connection) { connection_double }
+
+      subject = AutoReplica::ConnectionHandler.new(original_handler, pool_double)
+      connection = subject.retrieve_connection(TestThing)
+      expect(connection).to be_kind_of(AutoReplica::Adapter)
+    end
+
+    it 'releases the the read pool connection when finishing' do
+      original_handler = double('ActiveRecord_ConnectionHandler')
+      pool_double = double('ConnectionPool')
+      subject = AutoReplica::ConnectionHandler.new(original_handler, pool_double)
+
+      expect(pool_double).to receive(:release_connection)
+      subject.finish
+    end
+
+    it 'performs clear_all_connections! both on the contained handler and on the read pool' do
+      original_handler = double('ActiveRecord_ConnectionHandler')
+      pool_double = double('ConnectionPool')
+
+      expect(original_handler).to receive(:clear_all_connections!)
+      expect(pool_double).to receive(:disconnect!)
+
+      subject = AutoReplica::ConnectionHandler.new(original_handler, pool_double)
+      subject.clear_all_connections!
+    end
+  end
+
+  describe AutoReplica::AdHocConnectionHandler do
     it 'creates a read pool with the replica connection specification hash' do
       original_handler = double('ActiveRecord_ConnectionHandler')
       expect(ActiveRecord::ConnectionAdapters::ConnectionPool).to receive(:new).
         with(instance_of(AutoReplica::ConnectionSpecification))
       
-      AutoReplica::ConnectionHandler.new(original_handler, @replica_connection_config)
+      AutoReplica::AdHocConnectionHandler.new(original_handler, @replica_connection_config)
     end
     
     it 'proxies all methods' do
       original_handler = double('ActiveRecord_ConnectionHandler')
       expect(original_handler).to receive(:do_that_thing) { :yes }
-      subject = AutoReplica::ConnectionHandler.new(original_handler, @replica_connection_config)
+      subject = AutoReplica::AdHocConnectionHandler.new(original_handler, @replica_connection_config)
       expect(subject.do_that_thing).to eq(:yes)
     end
     
@@ -120,20 +163,21 @@ describe AutoReplica do
       adapter_double = double('ActiveRecord_Adapter')
       expect(original_handler).to receive(:retrieve_connection).with(TestThing) { adapter_double }
       
-      subject = AutoReplica::ConnectionHandler.new(original_handler, @replica_connection_config)
+      subject = AutoReplica::AdHocConnectionHandler.new(original_handler, @replica_connection_config)
       connection = subject.retrieve_connection(TestThing)
       expect(connection).to be_kind_of(AutoReplica::Adapter)
     end
-    
-    it 'disconnects the read pool when asked to' do
+
+    it 'disconnects the read pool when finishing' do
       original_handler = double('ActiveRecord_ConnectionHandler')
       pool_double = double('ConnectionPool')
       expect(ActiveRecord::ConnectionAdapters::ConnectionPool).to receive(:new).
         with(instance_of(AutoReplica::ConnectionSpecification)) { pool_double }
-      subject = AutoReplica::ConnectionHandler.new(original_handler, @replica_connection_config)
       
+      subject = AutoReplica::AdHocConnectionHandler.new(original_handler, @replica_connection_config)
+
       expect(pool_double).to receive(:disconnect!)
-      subject.disconnect_read_pool!
+      subject.finish
     end
     
     it 'performs clear_all_connections! both on the contained handler and on the read pool' do
@@ -145,7 +189,7 @@ describe AutoReplica do
       expect(original_handler).to receive(:clear_all_connections!)
       expect(pool_double).to receive(:disconnect!)
       
-      subject = AutoReplica::ConnectionHandler.new(original_handler, @replica_connection_config)
+      subject = AutoReplica::AdHocConnectionHandler.new(original_handler, @replica_connection_config)
       subject.clear_all_connections!
     end
   end

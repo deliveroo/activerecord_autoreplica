@@ -91,16 +91,6 @@ module AutoReplica
   def self.in_replica_context(read_pool)
     return yield if current_read_pool # This method should not be reentrant
 
-    # There is a pontential race condition here in a threaded environment, but
-    # in the worst case the handler will be set up twice. This shouldn't affect
-    # operations.
-    unless connection_set_up?
-      original_connection_handler = ActiveRecord::Base.connection_handler
-      custom_handler = AutoReplica::ConnectionHandler.new(original_connection_handler)
-      ActiveRecord::Base.connection_handler = custom_handler
-      connection_set_up!
-    end
-
     begin
       self.current_read_pool = read_pool
       yield
@@ -108,6 +98,14 @@ module AutoReplica
       current_read_pool.release_connection
       clear_current_read_pool
     end
+  end
+
+  def self.setup_connection!
+    return if connection_set_up?
+    original_connection_handler = ActiveRecord::Base.connection_handler
+    custom_handler = AutoReplica::ConnectionHandler.new(original_connection_handler)
+    ActiveRecord::Base.connection_handler = custom_handler
+    connection_set_up!
   end
 
   def self.get_pool(replica_connection_spec_hash_or_url)
@@ -235,3 +233,5 @@ module AutoReplica
 #  end
 
 end
+
+require 'activerecord_autoreplica/railtie'

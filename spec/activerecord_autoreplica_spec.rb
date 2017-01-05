@@ -6,6 +6,7 @@ describe AutoReplica do
   before :all do
     test_seed_name = SecureRandom.hex(4)
     ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ('master_db_%s.sqlite3' % test_seed_name), pool: 10)
+    AutoReplica.setup_connection!
 
     # Setup the master and replica connections
     @master_connection_config = ActiveRecord::Base.connection_config.dup

@@ -188,7 +188,6 @@ describe AutoReplica do
     end
 
     it 'enhances connection_for and returns an instance of the Adapter if the thread-local :autoreplica is set' do
-      Thread.current[:autoreplica] = true
       original_handler = double('ActiveRecord_ConnectionHandler')
       adapter_double = double('ActiveRecord_Adapter')
       connection_double = double('Connection')
@@ -211,6 +210,19 @@ describe AutoReplica do
       AutoReplica.clear_current_read_pool
       connection = subject.retrieve_connection(TestThing)
       expect(connection).to eq(:original_connection)
+    end
+
+    it 'disconnects the replica connection when calling clear_all_connections!!' do
+      original_handler = double('ActiveRecord_ConnectionHandler')
+      pool_double = double('ConnectionPool')
+      subject = AutoReplica::ConnectionHandler.new(original_handler)
+      expect(original_handler).to receive(:clear_all_connections!)
+      subject.clear_all_connections!
+      AutoReplica.current_read_pool = pool_double
+      expect(pool_double).to receive(:disconnect!)
+      expect(original_handler).to receive(:clear_all_connections!)
+      subject.clear_all_connections!
+      AutoReplica.clear_current_read_pool
     end
   end
 

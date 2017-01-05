@@ -172,7 +172,9 @@ module AutoReplica
 
     # Close all the connections maintained by the read pool
     def disconnect_read_pool!
-      AutoReplica.current_read_pool.disconnect!
+      if read_pool = AutoReplica.current_read_pool
+        read_pool.disconnect!
+      end
     end
 
     # Disconnect both the original handler AND the read pool
@@ -234,4 +236,4 @@ module AutoReplica
 
 end
 
-require 'activerecord_autoreplica/railtie'
+require 'activerecord_autoreplica/railtie' if defined?(Rails)

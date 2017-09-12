@@ -91,12 +91,17 @@ module AutoReplica
   def self.in_replica_context(read_pool)
     return yield if current_read_pool # This method should not be reentrant
 
-    begin
-      self.current_read_pool = read_pool
-      yield
-    ensure
-      current_read_pool.release_connection
-      clear_current_read_pool
+    Thread.handle_interrupt(Exception => :never) do
+      setup_connection!
+      begin
+        self.current_read_pool = read_pool
+        Thread.handle_interrupt(Exception => :immediate) do
+          yield
+        end
+      ensure
+        current_read_pool.release_connection
+        clear_current_read_pool
+      end
     end
   end
 

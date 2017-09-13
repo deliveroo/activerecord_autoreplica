@@ -163,15 +163,17 @@ module AutoReplica
     # Overridden method which gets called by ActiveRecord to get a connection related to a specific
     # ActiveRecord::Base subclass.
     def retrieve_connection(for_ar_class)
-      # See which thread is calling us. If it is the thread that initiated the `in_replica_context`
-      # block, we return a wrapper proxy. If it is not, then it is a different thread willing to
-      # use a connection, and we have to give it the original adapter instead
-      if read_pool = AutoReplica.current_read_pool
-        connection_for_writes = @original_handler.retrieve_connection(for_ar_class)
-        connection_for_reads = read_pool.connection
-        Adapter.new(connection_for_writes, connection_for_reads)
-      else
-        @original_handler.retrieve_connection(for_ar_class)
+      Thread.handle_interrupt(Exception => :never) do
+        # See which thread is calling us. If it is the thread that initiated the `in_replica_context`
+        # block, we return a wrapper proxy. If it is not, then it is a different thread willing to
+        # use a connection, and we have to give it the original adapter instead
+        if read_pool = AutoReplica.current_read_pool
+          connection_for_writes = @original_handler.retrieve_connection(for_ar_class)
+          connection_for_reads = read_pool.connection
+          Adapter.new(connection_for_writes, connection_for_reads)
+        else
+          @original_handler.retrieve_connection(for_ar_class)
+        end
       end
     end
 
